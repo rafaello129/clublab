@@ -13,12 +13,22 @@ python3 scripts/clublabctl/clublabctl.py inventory show team01
 python3 scripts/clublabctl/clublabctl.py inventory validate
 ```
 
-### Preflight and observation
+### Preflight, deploy and smoke
 
 ```bash
 python3 scripts/clublabctl/clublabctl.py preflight
 python3 scripts/clublabctl/clublabctl.py preflight team01
 
+python3 scripts/clublabctl/clublabctl.py deploy
+python3 scripts/clublabctl/clublabctl.py deploy team01
+
+python3 scripts/clublabctl/clublabctl.py smoke
+python3 scripts/clublabctl/clublabctl.py smoke team01
+```
+
+### Observation
+
+```bash
 python3 scripts/clublabctl/clublabctl.py status
 python3 scripts/clublabctl/clublabctl.py status team01
 
@@ -69,14 +79,6 @@ python3 scripts/clublabctl/clublabctl.py spare release
 python3 scripts/clublabctl/clublabctl.py audit tail --lines 30
 ```
 
-## Still reserved for Block D
-
-```text
-deploy
-```
-
-Block D will connect deployment, smoke tests and the final operational validation matrix.
-
 ## Runtime state
 
 Default:
@@ -95,6 +97,7 @@ Runtime tree:
 
 ```text
 runtime/
+├── gateway.env
 ├── teams/
 │   └── teamXX.env
 ├── secrets/
@@ -103,6 +106,12 @@ runtime/
 │   └── spare.json
 └── audit/
     └── clublabctl.jsonl
+```
+
+Templates live in:
+
+```text
+infrastructure/templates/
 ```
 
 Expected permissions:
@@ -128,6 +137,8 @@ IPAM
 container hardening
 resettable volume names
 runtime secret permissions
+APP network ownership
+gateway ownership
 ```
 
 It never uses:
@@ -139,10 +150,26 @@ docker volume prune
 docker network prune
 ```
 
-Recovery does not perform an automatic reset.
+Recovery does not perform an automatic reset. Deploy does not reset existing data.
 
-## Current infrastructure status
+## Deployment contract
 
-The operation code exists before the real `team.compose.yml`, gateway and application images.
+`deploy` expects real implementation artifacts:
 
-Therefore a real `preflight` is expected to fail until those implementation artifacts are added. This is intentional fail-closed behavior.
+```text
+infrastructure/compose/team.compose.yml
+infrastructure/compose/gateway.compose.yml
+runtime/teams/teamXX.env
+runtime/gateway.env
+pinned application images
+```
+
+Until those exist, preflight/deploy intentionally fail closed.
+
+## Tests
+
+```bash
+python -m unittest discover -s tests/operation -v
+```
+
+GitHub Actions runs the same operation suite on relevant changes.
