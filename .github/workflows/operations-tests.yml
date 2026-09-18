@@ -1,0 +1,29 @@
+name: Operations tests
+
+on:
+  push:
+    paths:
+      - "scripts/clublabctl/**"
+      - "infrastructure/teams/**"
+      - "tests/operation/**"
+      - ".github/workflows/operations-tests.yml"
+  pull_request:
+    paths:
+      - "scripts/clublabctl/**"
+      - "infrastructure/teams/**"
+      - "tests/operation/**"
+
+jobs:
+  unittest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run operation unit tests
+        run: python -m unittest discover -s tests/operation -v
