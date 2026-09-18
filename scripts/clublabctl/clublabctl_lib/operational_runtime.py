@@ -1,0 +1,247 @@
+from __future__ import annotations
+
+import ipaddress
+import json
+from typing import Any
+
+from .docker_runtime import DockerRuntime
+
+
+TEAM_ROLES = (
+    "frontend",
+    "api",
+    "database",
+    "toolbox",
+)
+
+DANGEROUS_CAPS = {
+    "SYS_ADMIN",
+    "NET_ADMIN",
+    "SYS_PTRACE",
+    "SYS_MODULE",
+}
+
+SENSITIVE_HOST_PATHS = (
+    "/var/run/docker.sock",
+    "/home/docker-data",
+    "/var/www/pelican",
+)
+
+
+class OperationalRuntime(DockerRuntime):
+    """DockerRuntime plus read-only operational observations."""
+
+    def service_status(self, team: str, role: str) -> str:
+        ref = self.find_one(team, role)
+        if not self.container_running(ref):
+            return "DOWN"
+
+        if role == "api":
+            status = self.public_status(team, "/api/health")
+            return "OK" if status == 200 else f"HTTP{status or 'DOWN'}"
+
+        state = self.container_health(ref)
+        if state in {"healthy", "running"}:
+            return "OK"
+        return state.upper() or "UNKNOWN"
+
+    def resource_rows(self, team: str) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        for role in TEAM_ROLES:
+            ref = self.find_one(team, role)
+            result = self.runner.run(
+                [
+                    "docker",
+                    "stats",
+                    "--no-stream",
+                    "--format",
+                    "{{json .}}",
+                    ref.id,
+                ],
+                timeout=15,
+            )
+            if result.returncode != 0:
+                raise RuntimeError(
+                    f"docker stats failed for {ref.name}: "
+                    f"{result.stderr.strip()}"
+                )
+            line = result.stdout.strip().splitlines()
+            if not line:
+                raise RuntimeError(
+                    f"docker stats returned no data for {ref.name}"
+                )
+            try:
+                stats = json.loads(line[-1])
+            except json.JSONDecodeError as exc:
+                raise RuntimeError(
+                    f"Invalid docker stats JSON for {ref.name}"
+                ) from exc
+
+            rows.append(
+                {
+                    "team": team,
+                    "role": role,
+                    "cpu": stats.get("CPUPerc", "?"),
+                    "memory": stats.get("MemUsage", "?"),
+                    "pids": stats.get("PIDs", "?"),
+                    "net_io": stats.get("NetIO", "?"),
+                }
+            )
+        return rows
+
+    def technical_logs(
+        self,
+        team: str,
+        role: str,
+        *,
+        lines: int,
+    ) -> str:
+        ref = self.find_one(team, role)
+        result = self.runner.run(
+            [
+                "docker",
+                "logs",
+                "--tail",
+                str(lines),
+                ref.id,
+            ],
+            timeout=15,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"Unable to read logs for {ref.name}: "
+                f"{result.stderr.strip()}"
+            )
+        # Docker may place logs on either stream.
+        if result.stdout and result.stderr:
+            return result.stdout.rstrip() + "\n" + result.stderr.rstrip()
+        return (result.stdout or result.stderr).rstrip()
+
+    def network_conflicts(self, team: str) -> list[str]:
+        planned = [
+            ipaddress.ip_network(
+                self.inventory.teams[team]["app_subnet"],
+                strict=True,
+            ),
+            ipaddress.ip_network(
+                self.inventory.teams[team]["data_subnet"],
+                strict=True,
+            ),
+        ]
+
+        ids = self.runner.run(
+            [
+                "docker",
+                "network",
+                "ls",
+                "--format",
+                "{{.ID}}",
+            ],
+            timeout=10,
+        )
+        if ids.returncode != 0:
+            raise RuntimeError(
+                f"Unable to list Docker networks: {ids.stderr.strip()}"
+            )
+
+        conflicts: list[str] = []
+        for network_id in [
+            line.strip()
+            for line in ids.stdout.splitlines()
+            if line.strip()
+        ]:
+            result = self.runner.run(
+                ["docker", "network", "inspect", network_id],
+                timeout=10,
+            )
+            if result.returncode != 0:
+                raise RuntimeError(
+                    f"Unable to inspect network {network_id}"
+                )
+
+            data = json.loads(result.stdout)
+            if not data:
+                continue
+            obj = data[0]
+            labels = obj.get("Labels") or {}
+            own_network = (
+                labels.get("com.clublab.project") == "clublab"
+                and labels.get("com.clublab.team") == team
+            )
+
+            if own_network:
+                continue
+
+            for cfg in (obj.get("IPAM") or {}).get("Config") or []:
+                subnet = cfg.get("Subnet")
+                if not subnet:
+                    continue
+                try:
+                    existing = ipaddress.ip_network(
+                        subnet,
+                        strict=False,
+                    )
+                except ValueError:
+                    continue
+
+                for candidate in planned:
+                    if candidate.overlaps(existing):
+                        conflicts.append(
+                            f"{candidate} overlaps "
+                            f"{obj.get('Name', network_id)}:{existing}"
+                        )
+
+        return conflicts
+
+    def security_issues(self, team: str) -> list[str]:
+        issues: list[str] = []
+
+        for role in TEAM_ROLES:
+            ref = self.find_one(team, role)
+            result = self.runner.run(
+                ["docker", "inspect", ref.id],
+                timeout=10,
+            )
+            if result.returncode != 0:
+                raise RuntimeError(
+                    f"Unable to inspect {ref.name}: "
+                    f"{result.stderr.strip()}"
+                )
+
+            data = json.loads(result.stdout)
+            obj = data[0]
+            host = obj.get("HostConfig") or {}
+
+            if host.get("Privileged"):
+                issues.append(f"{role}: privileged=true")
+
+            if host.get("NetworkMode") == "host":
+                issues.append(f"{role}: host network")
+
+            if host.get("PidMode") == "host":
+                issues.append(f"{role}: host PID namespace")
+
+            if host.get("IpcMode") == "host":
+                issues.append(f"{role}: host IPC namespace")
+
+            for cap in host.get("CapAdd") or []:
+                if str(cap).upper() in DANGEROUS_CAPS:
+                    issues.append(f"{role}: dangerous capability {cap}")
+
+            for mount in obj.get("Mounts") or []:
+                source = str(mount.get("Source") or "")
+                if source in SENSITIVE_HOST_PATHS:
+                    issues.append(f"{role}: sensitive mount {source}")
+                if source == "/home/tulum" or source.startswith(
+                    "/home/tulum/apps/"
+                ):
+                    issues.append(f"{role}: host app mount {source}")
+
+            ports = (obj.get("NetworkSettings") or {}).get("Ports") or {}
+            for container_port, bindings in ports.items():
+                if bindings:
+                    issues.append(
+                        f"{role}: directly published {container_port}"
+                    )
+
+        return issues
