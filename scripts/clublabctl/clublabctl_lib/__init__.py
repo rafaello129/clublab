@@ -1,4 +1,5 @@
 from .audit import AuditLogger
+from .deployment import DeploymentManager, SmokeCheck
 from .inventory import Inventory, load_inventory, require_target, validate_inventory
 from .monitor import OperationalMonitor, TeamStatus
 from .operations import (
