@@ -6,7 +6,7 @@
 3. Seguridad y aislamiento — ✅ diseño completado; validación empírica pendiente.
 4. Aplicación ClubLab — ✅ diseño completado; implementación real pendiente.
 5. Scenario Manager y operación — ✅ diseño y control plane completados; live validation pendiente.
-6. Roles y dinámica de equipos — ⏳ pendiente.
+6. Roles y dinámica de equipos — 🟡 plan completado; Bloques A–D pendientes.
 7. Materiales del alumno — ⏳ pendiente.
 8. Materiales del instructor — ⏳ pendiente.
 9. Ensayo técnico y pedagógico — ⏳ pendiente.
@@ -15,7 +15,7 @@
 
 ## Fase 5 — cerrada
 
-```text
+~~~text
 Block A
 inventory
 student/instructor CLI contracts
@@ -44,13 +44,39 @@ smoke tests
 runtime templates
 operational validation matrix
 D04
-```
+~~~
+
+## Fase 6 — plan
+
+~~~text
+Block A
+contrato final de roles
+configuraciones 2/3/4/5 integrantes
+
+Block B
+matriz misión/rol
+rotación
+handoff
+regla del teclado
+predicción/evidencia
+
+Block C
+incidente colaborativo
+participación
+avanzados/principiantes
+contingencias
+
+Block D
+validación de mesa
+validación de tiempos
+consolidación D05
+~~~
 
 ## Próxima necesidad técnica
 
 Antes de un ensayo real hay que implementar los artefactos que el control plane ya espera:
 
-```text
+~~~text
 frontend
 backend
 database migrations/seeds/bootstrap
@@ -60,6 +86,6 @@ gateway.compose.yml
 gateway config
 runtime generation
 pinned images
-```
+~~~
 
 Las Fases 6–8 pueden documentarse en paralelo, pero Fase 9 no debe iniciarse hasta que la aplicación e infraestructura reales pasen preflight, smoke y security gates.
