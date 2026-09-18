@@ -6,7 +6,7 @@
 3. Seguridad y aislamiento — ✅ diseño completado; validación empírica pendiente.
 4. Aplicación ClubLab — ✅ diseño completado; implementación real pendiente.
 5. Scenario Manager y operación — ✅ diseño y control plane completados; live validation pendiente.
-6. Roles y dinámica de equipos — 🟡 Bloque A completado; Bloques B–D pendientes.
+6. Roles y dinámica de equipos — 🟡 Bloques A–B completados; Bloques C–D pendientes.
 7. Materiales del alumno — ⏳ pendiente.
 8. Materiales del instructor — ⏳ pendiente.
 9. Ensayo técnico y pedagógico — ⏳ pendiente.
@@ -58,23 +58,25 @@ evidencia mínima por rol
 configuraciones 2/3/4/5 integrantes
 contingencia individual
 reglas para avanzados/principiantes
+
+Block B
+matriz M0–M8
+funciones OPERAR/OBSERVAR/VERIFICAR/REGISTRAR
+protocolo POE
+regla del teclado
+rotación 2/3/4/5 integrantes
+handoff y readback
+M7 por rondas de evidencia
+barrera previa a recover
 ~~~
 
 Pendiente:
 
 ~~~text
-Block B
-matriz misión/rol
-funciones operar/observar/verificar/registrar
-rotación
-handoff
-regla del teclado
-predicción/evidencia
-
 Block C
 incidente colaborativo
 participación
-avanzados/principiantes
+equipos rápidos/lentos
 contingencias
 
 Block D
