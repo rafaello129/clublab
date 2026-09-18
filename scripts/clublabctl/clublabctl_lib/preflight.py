@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ipaddress
+import json
 import os
 import shutil
 import socket
@@ -26,25 +27,36 @@ class CheckResult:
 
 
 def mode_string(path: Path) -> str:
-    return oct(stat.S_IMODE(path.stat().st_mode))
+    return oct(
+        stat.S_IMODE(
+            path.stat().st_mode
+        )
+    )
 
 
 def mem_available_bytes(
     path: Path = Path("/proc/meminfo"),
 ) -> int:
     values: dict[str, int] = {}
+
     for line in path.read_text(
         encoding="utf-8"
     ).splitlines():
-        key, value = line.split(":", 1)
+        key, value = line.split(
+            ":",
+            1,
+        )
         parts = value.strip().split()
+
         if (
             parts
             and parts[0].isdigit()
         ):
             values[key] = (
-                int(parts[0]) * 1024
+                int(parts[0])
+                * 1024
             )
+
     return values.get(
         "MemAvailable",
         0,
@@ -79,10 +91,12 @@ class PreflightRunner:
                     "enabled_by_default"
                 )
             ]
+
         if target not in self.inventory.teams:
             raise ValueError(
                 f"Unknown target: {target}"
             )
+
         return [target]
 
     def _port_free(
@@ -99,6 +113,7 @@ class PreflightRunner:
             family,
             socket.SOCK_STREAM,
         )
+
         try:
             sock.setsockopt(
                 socket.SOL_SOCKET,
@@ -106,13 +121,62 @@ class PreflightRunner:
                 1,
             )
             sock.bind(
-                (bind_ip, port)
+                (
+                    bind_ip,
+                    port,
+                )
             )
             return True
         except OSError:
             return False
         finally:
             sock.close()
+
+    def _host_has_ip(
+        self,
+        bind_ip: str,
+    ) -> bool:
+        result = self.runner.run(
+            [
+                "ip",
+                "-j",
+                "address",
+                "show",
+            ],
+            timeout=10,
+        )
+
+        if result.returncode != 0:
+            raise RuntimeError(
+                "Unable to inspect host addresses: "
+                f"{result.stderr.strip()}"
+            )
+
+        try:
+            interfaces = json.loads(
+                result.stdout
+            )
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                "Invalid output from ip -j address show"
+            ) from exc
+
+        for interface in interfaces:
+            for addr in (
+                interface.get(
+                    "addr_info"
+                )
+                or []
+            ):
+                if str(
+                    addr.get(
+                        "local"
+                    )
+                    or ""
+                ) == bind_ip:
+                    return True
+
+        return False
 
     def run(
         self,
@@ -126,6 +190,7 @@ class PreflightRunner:
         inv_errors = validate_inventory(
             self.inventory
         )
+
         if inv_errors:
             results.append(
                 CheckResult(
@@ -175,6 +240,7 @@ class PreflightRunner:
             / "compose"
             / "team.compose.yml"
         )
+
         results.append(
             CheckResult(
                 "CONFIG",
@@ -225,6 +291,37 @@ class PreflightRunner:
             )
         )
 
+        if bind_valid:
+            try:
+                assigned = self._host_has_ip(
+                    bind_ip
+                )
+                results.append(
+                    CheckResult(
+                        "NETWORK",
+                        "bind IP on host",
+                        (
+                            PASS
+                            if assigned
+                            else FAIL
+                        ),
+                        (
+                            f"{bind_ip} assigned"
+                            if assigned
+                            else f"{bind_ip} not present on host"
+                        ),
+                    )
+                )
+            except Exception as exc:
+                results.append(
+                    CheckResult(
+                        "NETWORK",
+                        "bind IP on host",
+                        FAIL,
+                        str(exc),
+                    )
+                )
+
         capacity = (
             self.inventory.raw
             .get(
@@ -232,6 +329,7 @@ class PreflightRunner:
                 {},
             )
         )
+
         memory_per_team_mib = int(
             capacity.get(
                 "memory_per_absent_team_mib",
@@ -317,6 +415,7 @@ class PreflightRunner:
         usage = shutil.disk_usage(
             disk_root
         )
+
         disk_required = (
             (
                 absent
@@ -443,22 +542,43 @@ class PreflightRunner:
                     port,
                 )
 
-                if deployed:
+                try:
+                    gateway_owned = (
+                        self.runtime
+                        .access_port_owned_by_gateway(
+                            bind_ip,
+                            port,
+                        )
+                    )
+                except Exception as exc:
+                    gateway_owned = False
+                    results.append(
+                        CheckResult(
+                            "PORTS",
+                            f"{bind_ip}:{port} owner",
+                            FAIL,
+                            str(exc),
+                        )
+                    )
+
+                if gateway_owned:
                     status = PASS
                     detail = (
-                        "team already deployed; "
-                        "runtime owns expected access"
+                        "owned by clublab-gateway"
+                    )
+                elif free and not deployed:
+                    status = PASS
+                    detail = "free"
+                elif free and deployed:
+                    status = FAIL
+                    detail = (
+                        "team deployed but gateway "
+                        "is not publishing access port"
                     )
                 else:
-                    status = (
-                        PASS
-                        if free
-                        else FAIL
-                    )
+                    status = FAIL
                     detail = (
-                        "free"
-                        if free
-                        else "already in use"
+                        "already in use by non-ClubLab owner"
                     )
 
                 results.append(
