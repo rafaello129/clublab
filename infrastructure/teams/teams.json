@@ -1,0 +1,84 @@
+{
+  "version": 1,
+  "project": "clublab",
+  "resource_prefix": "clublab",
+  "required_labels": {
+    "com.clublab.project": "clublab",
+    "com.clublab.managed-by": "clublab",
+    "com.clublab.disposable": "true"
+  },
+  "gateway": {
+    "bind_ip_env": "CLUBLAB_BIND_IP",
+    "ingress_subnet": "10.77.250.0/24"
+  },
+  "scenarios": [
+    "normal",
+    "ranking-db-failure",
+    "api-down"
+  ],
+  "roles": [
+    "frontend",
+    "api",
+    "database",
+    "toolbox",
+    "gateway"
+  ],
+  "teams": {
+    "team01": {
+      "display_name": "Equipo 01",
+      "access_port": 8211,
+      "app_subnet": "10.77.1.0/24",
+      "data_subnet": "10.77.101.0/24",
+      "compose_project": "clublab-team01",
+      "enabled_by_default": true
+    },
+    "team02": {
+      "display_name": "Equipo 02",
+      "access_port": 8212,
+      "app_subnet": "10.77.2.0/24",
+      "data_subnet": "10.77.102.0/24",
+      "compose_project": "clublab-team02",
+      "enabled_by_default": true
+    },
+    "team03": {
+      "display_name": "Equipo 03",
+      "access_port": 8213,
+      "app_subnet": "10.77.3.0/24",
+      "data_subnet": "10.77.103.0/24",
+      "compose_project": "clublab-team03",
+      "enabled_by_default": true
+    },
+    "team04": {
+      "display_name": "Equipo 04",
+      "access_port": 8214,
+      "app_subnet": "10.77.4.0/24",
+      "data_subnet": "10.77.104.0/24",
+      "compose_project": "clublab-team04",
+      "enabled_by_default": true
+    },
+    "team05": {
+      "display_name": "Equipo 05",
+      "access_port": 8215,
+      "app_subnet": "10.77.5.0/24",
+      "data_subnet": "10.77.105.0/24",
+      "compose_project": "clublab-team05",
+      "enabled_by_default": false
+    },
+    "team06": {
+      "display_name": "Equipo 06",
+      "access_port": 8216,
+      "app_subnet": "10.77.6.0/24",
+      "data_subnet": "10.77.106.0/24",
+      "compose_project": "clublab-team06",
+      "enabled_by_default": false
+    },
+    "spare": {
+      "display_name": "Spare",
+      "access_port": 8219,
+      "app_subnet": "10.77.9.0/24",
+      "data_subnet": "10.77.109.0/24",
+      "compose_project": "clublab-spare",
+      "enabled_by_default": true
+    }
+  }
+}

@@ -1,0 +1,217 @@
+#!/usr/bin/env python3
+"""Student-facing ClubLab CLI.
+
+This tool intentionally has no Docker or host-management capabilities.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+import urllib.error
+import urllib.request
+from collections import deque
+from pathlib import Path
+
+OK = 0
+CONFIG = 3
+CHECK_FAILED = 4
+OPERATION_FAILED = 5
+
+API_URL = os.getenv("CLUBLAB_API_URL", "http://api:3000").rstrip("/")
+FRONTEND_URL = os.getenv("CLUBLAB_FRONTEND_URL", "http://frontend:8080").rstrip("/")
+DB_HOST = os.getenv("CLUBLAB_DB_HOST", "database")
+DB_PORT = os.getenv("CLUBLAB_DB_PORT", "5432")
+DB_NAME = os.getenv("CLUBLAB_DB_NAME", "clublab")
+DB_USER = os.getenv("CLUBLAB_DB_USER", "student")
+LABLOG_PATH = Path(os.getenv("CLUBLAB_LABLOG_PATH", "/var/log/clublab/lab-events.jsonl"))
+RECOVERY_TOKEN_FILE = Path(
+    os.getenv("CLUBLAB_RECOVERY_TOKEN_FILE", "/run/secrets/clublab_recovery_token")
+)
+
+
+def http_status(url: str, *, timeout: float = 3.0) -> tuple[int | None, str | None]:
+    try:
+        req = urllib.request.Request(url, method="GET")
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            return response.status, None
+    except urllib.error.HTTPError as exc:
+        return exc.code, None
+    except Exception as exc:  # network errors are part of the diagnostic output
+        return None, str(exc)
+
+
+def cmd_whoami(_: argparse.Namespace) -> int:
+    print(f"Team: {os.getenv('CLUBLAB_TEAM_ID', 'unknown')}")
+    print(f"Name: {os.getenv('CLUBLAB_TEAM_NAME', 'ClubLab team')}")
+    print(f"API: {API_URL.removeprefix('http://').removeprefix('https://')}")
+    print(f"Database: {DB_HOST}:{DB_PORT}")
+    print("Toolbox user: student")
+    return OK
+
+
+def cmd_status(_: argparse.Namespace) -> int:
+    checks: list[tuple[str, bool, str]] = []
+
+    frontend_status, frontend_error = http_status(FRONTEND_URL)
+    checks.append(("Frontend", frontend_status is not None and frontend_status < 500,
+                   str(frontend_status) if frontend_status is not None else frontend_error or "unreachable"))
+
+    api_status, api_error = http_status(f"{API_URL}/api/health")
+    checks.append(("API", api_status == 200,
+                   str(api_status) if api_status is not None else api_error or "unreachable"))
+
+    try:
+        result = subprocess.run(
+            ["pg_isready", "-h", DB_HOST, "-p", DB_PORT, "-d", DB_NAME, "-U", DB_USER],
+            capture_output=True,
+            text=True,
+            timeout=3,
+            check=False,
+        )
+        checks.append(("Database", result.returncode == 0, "accepting" if result.returncode == 0 else "unavailable"))
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        checks.append(("Database", False, "pg_isready unavailable"))
+
+    checks.append(("Toolbox", True, "ready"))
+
+    failed = False
+    for name, healthy, detail in checks:
+        print(f"{name:<10} {'OK' if healthy else 'FAIL':<4} {detail}")
+        failed = failed or not healthy
+    return CHECK_FAILED if failed else OK
+
+
+def cmd_health(_: argparse.Namespace) -> int:
+    api_status, api_error = http_status(f"{API_URL}/api/health")
+    ranking_status, ranking_error = http_status(f"{API_URL}/api/ranking")
+
+    print(f"API /api/health     {api_status if api_status is not None else 'DOWN'}")
+    print(f"Ranking endpoint    {ranking_status if ranking_status is not None else 'DOWN'}")
+
+    try:
+        result = subprocess.run(
+            ["pg_isready", "-h", DB_HOST, "-p", DB_PORT, "-d", DB_NAME, "-U", DB_USER],
+            capture_output=True,
+            text=True,
+            timeout=3,
+            check=False,
+        )
+        db_ok = result.returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        db_ok = False
+    print(f"Database accepting  {'yes' if db_ok else 'no'}")
+
+    if api_error:
+        print(f"API detail           {api_error}")
+    if ranking_error:
+        print(f"Ranking detail       {ranking_error}")
+
+    return OK if api_status == 200 and db_ok and ranking_status == 200 else CHECK_FAILED
+
+
+def cmd_logs(args: argparse.Namespace) -> int:
+    if args.service != "api":
+        print("Only 'api' lab logs are available.", file=sys.stderr)
+        return CONFIG
+    if not LABLOG_PATH.is_file():
+        print("Lab log is not available.", file=sys.stderr)
+        return CHECK_FAILED
+
+    lines = deque(maxlen=args.lines)
+    try:
+        with LABLOG_PATH.open("r", encoding="utf-8") as handle:
+            for raw in handle:
+                lines.append(raw.rstrip("\n"))
+    except OSError as exc:
+        print(f"Unable to read lab log: {exc}", file=sys.stderr)
+        return OPERATION_FAILED
+
+    for raw in lines:
+        try:
+            event = json.loads(raw)
+            ts = str(event.get("ts", ""))[11:19] or "--:--:--"
+            layer = str(event.get("layer", "SYSTEM"))[:10]
+            detail = event.get("detail") or event.get("event") or ""
+            print(f"{ts} {layer:<10} {detail}")
+        except json.JSONDecodeError:
+            print(raw)
+    return OK
+
+
+def cmd_recover(args: argparse.Namespace) -> int:
+    if args.scenario != "ranking-db":
+        print("Only 'ranking-db' can be recovered by students.", file=sys.stderr)
+        return CONFIG
+    try:
+        token = RECOVERY_TOKEN_FILE.read_text(encoding="utf-8").strip()
+    except OSError:
+        print("Recovery credential is not available.", file=sys.stderr)
+        return CONFIG
+    if not token:
+        print("Recovery credential is empty.", file=sys.stderr)
+        return CONFIG
+
+    url = f"{API_URL}/internal/lab/recover/ranking-db"
+    req = urllib.request.Request(
+        url,
+        data=b"{}",
+        method="POST",
+        headers={
+            "Content-Type": "application/json",
+            "X-ClubLab-Recovery-Token": token,
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5) as response:
+            payload = json.loads(response.read().decode("utf-8") or "{}")
+    except urllib.error.HTTPError as exc:
+        print(f"Recovery denied or failed (HTTP {exc.code}).", file=sys.stderr)
+        return OPERATION_FAILED
+    except Exception as exc:
+        print(f"Recovery request failed: {exc}", file=sys.stderr)
+        return OPERATION_FAILED
+
+    if payload.get("changed"):
+        print("Recovery completed. Ranking dependency restored.")
+    else:
+        print("Environment already healthy.")
+    return OK
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="clublab", description="ClubLab student diagnostic CLI")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    p = sub.add_parser("whoami", help="Show logical identity of this team")
+    p.set_defaults(func=cmd_whoami)
+
+    p = sub.add_parser("status", help="Check the main components")
+    p.set_defaults(func=cmd_status)
+
+    p = sub.add_parser("health", help="Check API, ranking and database health")
+    p.set_defaults(func=cmd_health)
+
+    p = sub.add_parser("logs", help="Read pedagogical logs")
+    p.add_argument("service", choices=["api"])
+    p.add_argument("--lines", type=int, default=40, choices=range(1, 101), metavar="N")
+    p.set_defaults(func=cmd_logs)
+
+    p = sub.add_parser("recover", help="Run a scoped recovery action")
+    p.add_argument("scenario", choices=["ranking-db"])
+    p.set_defaults(func=cmd_recover)
+
+    return parser
+
+
+def main() -> int:
+    parser = build_parser()
+    args = parser.parse_args()
+    return int(args.func(args))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
