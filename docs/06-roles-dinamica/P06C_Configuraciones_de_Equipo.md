@@ -1,17 +1,28 @@
 # P06C — Configuraciones de equipo
 ## ClubLab #01
 
-**Estado:** FINAL PARA FASE 6 / BLOQUE A
+**Estado:** FINAL PARA FASE 6 / BLOQUES A–B
 
 ---
 
 # 1. Configuración de referencia — 4 personas
+
+Antes de rotar:
 
 ~~~text
 A → R1 Interfaz
 B → R2 API
 C → R3 Datos
 D → R4 Sistemas
+~~~
+
+Después de M5:
+
+~~~text
+A → R4 Sistemas
+B → R3 Datos
+C → R2 API
+D → R1 Interfaz
 ~~~
 
 Esta es la configuración ideal.
@@ -22,11 +33,23 @@ Todos los tiempos y materiales se diseñan primero para este caso.
 
 # 2. Equipo de 5 personas
 
+Antes:
+
 ~~~text
 A → R1 Interfaz
 B → R2 API
 C → R3 Datos
 D → R4 Sistemas
+E → R5 Relator
+~~~
+
+Después:
+
+~~~text
+A → R4 Sistemas
+B → R3 Datos
+C → R2 API
+D → R1 Interfaz
 E → R5 Relator
 ~~~
 
@@ -38,18 +61,29 @@ No sustituye a ningún rol base.
 
 # 3. Equipo de 3 personas
 
+Antes:
+
 ~~~text
 A → R1 Interfaz
 B → R2 API + R3 Datos
 C → R4 Sistemas
 ~~~
 
+Después:
+
+~~~text
+A → R4 Sistemas
+B → R1 Interfaz
+C → R2 API + R3 Datos
+~~~
+
 Reglas:
 
 ~~~text
-B cambia explícitamente de modo API a modo Datos
-A verifica UI durante M3/M4
-C mantiene visión de estado cuando no lidera
+el bundle API+Datos cambia de persona
+quien usa el bundle anuncia qué rol está ejerciendo
+A verifica UI durante M3/M4 antes de la rotación
+C mantiene visión de estado cuando no lidera antes de la rotación
 ~~~
 
 La combinación API+Datos es operativa, no conceptual.
@@ -58,9 +92,18 @@ La combinación API+Datos es operativa, no conceptual.
 
 # 4. Equipo de 2 personas
 
+Antes:
+
 ~~~text
 A → R1 Interfaz + R2 API
 B → R3 Datos + R4 Sistemas
+~~~
+
+Después:
+
+~~~text
+A → R3 Datos + R4 Sistemas
+B → R1 Interfaz + R2 API
 ~~~
 
 Reglas:
@@ -69,6 +112,7 @@ Reglas:
 trabajo secuencial
 una herramienta principal a la vez
 decir en voz alta qué rol se está usando
+no ejecutar UI/API o Datos/Sistemas como una sola capa
 más apoyo del instructor si aparece sobrecarga
 ~~~
 
@@ -81,9 +125,14 @@ M0–M1 → Interfaz
 M2     → API
 M3–M4 → Datos
 M5     → Sistemas
-M6–M7 → alternar capas
+M6     → volver a Interfaz
+M7     → Interfaz → API → Datos → Sistemas
 M8     → integrar
 ~~~
+
+No existe handoff interpersonal.
+
+La persona declara explícitamente cada cambio de “sombrero”.
 
 El instructor pregunta y pide evidencia, pero no opera por el alumno.
 
@@ -173,7 +222,7 @@ explicar
 # 10. Una laptop por equipo
 
 ~~~text
-rol principal de la misión → teclado
+función OPERAR → teclado
 resto → observar/verificar/registrar
 ~~~
 
@@ -194,12 +243,22 @@ Pero todo hallazgo debe volver al equipo.
 
 No son cuatro ejercicios individuales.
 
+Durante M7 se priorizan rondas secuenciales por capa.
+
 ---
 
-# 12. Compatibilidad con rotación
+# 12. Handoff
 
-Las configuraciones quedan preparadas para la rotación del Bloque B.
+El protocolo definitivo está en:
 
-Este documento no congela todavía el mapa exacto posterior a M5 para equipos de 2 y 3 personas.
+~~~text
+P06B_Protocolo_Rotacion_y_Handoff.md
+~~~
 
-Ese comportamiento se define en P06B.
+Tiempo máximo:
+
+~~~text
+2 minutos
+~~~
+
+Toda transferencia termina con readback.
