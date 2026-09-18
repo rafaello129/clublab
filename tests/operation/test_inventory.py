@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import sys
 import unittest
 from pathlib import Path
 
@@ -12,6 +13,7 @@ INVENTORY_PATH = ROOT / "infrastructure" / "teams" / "teams.json"
 spec = importlib.util.spec_from_file_location("clublabctl", CLI_PATH)
 assert spec and spec.loader
 clublabctl = importlib.util.module_from_spec(spec)
+sys.modules["clublabctl"] = clublabctl
 spec.loader.exec_module(clublabctl)
 
 
