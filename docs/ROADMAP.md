@@ -4,8 +4,8 @@
 1. Diseño pedagógico — ✅ completada.
 2. Arquitectura técnica — ✅ diseño completado.
 3. Seguridad y aislamiento — ✅ diseño completado; validación empírica pendiente.
-4. Aplicación ClubLab — ✅ diseño completado; implementación pendiente.
-5. Scenario Manager y operación — 🟡 Bloques A–C completados; Bloque D pendiente.
+4. Aplicación ClubLab — ✅ diseño completado; implementación real pendiente.
+5. Scenario Manager y operación — ✅ diseño y control plane completados; live validation pendiente.
 6. Roles y dinámica de equipos — ⏳ pendiente.
 7. Materiales del alumno — ⏳ pendiente.
 8. Materiales del instructor — ⏳ pendiente.
@@ -13,50 +13,53 @@
 10. Ejecución de clase — ⏳ pendiente.
 11. Feedback y evolución — ⏳ pendiente.
 
-## Fase 5
-
-Completado:
+## Fase 5 — cerrada
 
 ```text
 Block A
 inventory
 student/instructor CLI contracts
-team targeting
 runtime state model
 
 Block B
 scenario load/clear/status
-ranking-db-failure orchestration
-api-down orchestration
-instructor recovery R1/R2
-guarded reset orchestration
+ranking-db-failure
+api-down
+recovery R1/R2
+guarded reset
 
 Block C
 preflight
 status
 resources
 technical logs
-spare assignment
-structured audit
-container security inspection
-operation unit tests
-```
+spare
+audit
+security inspection
 
-Siguiente:
-
-```text
 Block D
-deploy
-runtime generation contract
+deploy orchestration
+shared gateway contract
 smoke tests
+runtime templates
 operational validation matrix
-D04 final
+D04
 ```
 
-Después de Fase 5:
+## Próxima necesidad técnica
+
+Antes de un ensayo real hay que implementar los artefactos que el control plane ya espera:
 
 ```text
-implementar aplicación e infraestructura reales
-ejecutar security gates
-continuar con roles/materiales/ensayo
+frontend
+backend
+database migrations/seeds/bootstrap
+toolbox image
+team.compose.yml
+gateway.compose.yml
+gateway config
+runtime generation
+pinned images
 ```
+
+Las Fases 6–8 pueden documentarse en paralelo, pero Fase 9 no debe iniciarse hasta que la aplicación e infraestructura reales pasen preflight, smoke y security gates.
