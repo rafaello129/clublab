@@ -6,7 +6,7 @@
 3. Seguridad y aislamiento — ✅ diseño completado; validación empírica pendiente.
 4. Aplicación ClubLab — ✅ diseño completado; implementación real pendiente.
 5. Scenario Manager y operación — ✅ diseño y control plane completados; live validation pendiente.
-6. Roles y dinámica de equipos — 🟡 Bloques A–B completados; Bloques C–D pendientes.
+6. Roles y dinámica de equipos — 🟡 Bloques A–C completados; Bloque D pendiente.
 7. Materiales del alumno — ⏳ pendiente.
 8. Materiales del instructor — ⏳ pendiente.
 9. Ensayo técnico y pedagógico — ⏳ pendiente.
@@ -68,20 +68,30 @@ rotación 2/3/4/5 integrantes
 handoff y readback
 M7 por rondas de evidencia
 barrera previa a recover
+
+Block C
+protocolo M6/M7
+hipótesis principal + alternativa
+evidencia fuerte/débil
+barrera reforzada de recovery
+verificación post-recover
+regla anti-monopolio
+escalera de pistas P0–P4
+equipos rápidos/lentos
+ausencias
+fallo de laptop
+recover prematuro
+contingencias C1–C6
 ~~~
 
 Pendiente:
 
 ~~~text
-Block C
-incidente colaborativo
-participación
-equipos rápidos/lentos
-contingencias
-
 Block D
-validación de mesa
-validación de tiempos
+validación de mesa 2/3/4/5 personas
+validación temporal
+validación de participación
+validación de seguridad
 consolidación D05
 ~~~
 
