@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Builds
+dist/
+build/
+coverage/
+
+# Runtime configuration and secrets
+.env
+.env.*
+!.env.example
+runtime/
+**/runtime/
+*.secret
+*.credentials
+*.token
+
+# Team-generated configuration
+infrastructure/teams/*.env
+!infrastructure/teams/.gitkeep
+
+# Logs
+*.log
+logs/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp/
+.temp/
+.cache/
