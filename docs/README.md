@@ -9,10 +9,11 @@ La documentación se organiza por fase.
 - [Fase 3 — Seguridad y aislamiento](./03-seguridad/)
 - [Fase 4 — Aplicación](./04-aplicacion/)
 - [Fase 5 — Operación](./05-operacion/)
+- [Fase 6 — Roles y dinámica](./06-roles-dinamica/)
 
 ## Consolidados
 
-```text
+~~~text
 D00 Estado base del servidor
 D01 Diseño de experiencia
 D02 Arquitectura técnica
@@ -22,6 +23,6 @@ APP02 Backend y API
 APP03 Frontend y UX
 APP04 Aplicación integrada
 D04 Scenario Manager y operación
-```
+~~~
 
-La Fase 5 está cerrada a nivel de diseño y control plane. La validación live de D04 se realizará cuando existan los Compose, imágenes y runtime reales.
+La Fase 6 inicia la consolidación de roles, rotación y dinámica de equipos. Su documento final previsto será D05.
