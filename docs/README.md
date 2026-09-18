@@ -21,6 +21,7 @@ APP01 Modelo de dominio y datos
 APP02 Backend y API
 APP03 Frontend y UX
 APP04 Aplicación integrada
+D04 Scenario Manager y operación
 ```
 
-La Fase 5 ya tiene su plan y el Bloque A de CLIs/inventario cerrado. Los documentos de bloque conservan el razonamiento y las decisiones intermedias.
+La Fase 5 está cerrada a nivel de diseño y control plane. La validación live de D04 se realizará cuando existan los Compose, imágenes y runtime reales.
