@@ -21,6 +21,7 @@ from clublabctl_lib import (  # noqa: E402
     OPERATION_FAILED,
     SECURITY_GUARD,
     CommandRunner,
+    DeploymentManager,
     Inventory,
     OperationalMonitor,
     PreflightRunner,
@@ -36,7 +37,7 @@ from clublabctl_lib import (  # noqa: E402
 from clublabctl_lib.operational_runtime import OperationalRuntime  # noqa: E402
 
 
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 REPO_ROOT = HERE.parents[1]
 DEFAULT_INVENTORY = (
     REPO_ROOT
@@ -60,6 +61,7 @@ class Context:
     preflight: PreflightRunner
     spare: SpareManager
     audit: AuditLogger
+    deployment: DeploymentManager
 
 
 def cmd_version(
@@ -212,11 +214,7 @@ def cmd_scenario_status(
             )
             failed = True
 
-    return (
-        CHECK_FAILED
-        if failed
-        else OK
-    )
+    return CHECK_FAILED if failed else OK
 
 
 def cmd_recover(
@@ -307,11 +305,7 @@ def cmd_preflight(
             )
         },
     )
-    return (
-        CHECK_FAILED
-        if failed
-        else OK
-    )
+    return CHECK_FAILED if failed else OK
 
 
 def cmd_status(
@@ -358,11 +352,7 @@ def cmd_status(
         ):
             failed = True
 
-    return (
-        CHECK_FAILED
-        if failed
-        else OK
-    )
+    return CHECK_FAILED if failed else OK
 
 
 def cmd_resources(
@@ -374,7 +364,9 @@ def cmd_resources(
     )
 
     if not rows:
-        print("No deployed ClubLab resources found.")
+        print(
+            "No deployed ClubLab resources found."
+        )
         return OK
 
     print(
@@ -518,7 +510,9 @@ def cmd_audit_tail(
         args.lines
     )
     if not events:
-        print("Audit log is empty.")
+        print(
+            "Audit log is empty."
+        )
         return OK
 
     for event in events:
@@ -532,29 +526,36 @@ def cmd_audit_tail(
     return OK
 
 
-def cmd_planned(
+def cmd_deploy(
     args: argparse.Namespace,
     ctx: Context,
 ) -> int:
-    target = getattr(
-        args,
-        "target",
-        None,
+    results, code = ctx.deployment.deploy(
+        args.target
     )
-    if target is not None:
-        require_target(
-            ctx.inventory,
-            target,
-            allow_all=True,
+    for result in results:
+        print(
+            f"{result.team:<8} "
+            f"{'SUCCESS' if result.ok else 'FAIL':<7} "
+            f"{result.detail}"
         )
+    return code
 
-    print(
-        f"{args.command_path}: "
-        "reserved by Phase 5; "
-        "implementation arrives in Block D.",
-        file=sys.stderr,
+
+def cmd_smoke(
+    args: argparse.Namespace,
+    ctx: Context,
+) -> int:
+    results, code = ctx.deployment.smoke(
+        args.target
     )
-    return NOT_IMPLEMENTED
+    for result in results:
+        print(
+            f"{result.team:<8} "
+            f"{'PASS' if result.ok else 'FAIL':<5} "
+            f"{result.detail}"
+        )
+    return code
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -611,6 +612,26 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.set_defaults(
         func=cmd_preflight
+    )
+
+    p = sub.add_parser("deploy")
+    p.add_argument(
+        "target",
+        nargs="?",
+        default="all",
+    )
+    p.set_defaults(
+        func=cmd_deploy
+    )
+
+    p = sub.add_parser("smoke")
+    p.add_argument(
+        "target",
+        nargs="?",
+        default="all",
+    )
+    p.set_defaults(
+        func=cmd_smoke
     )
 
     p = sub.add_parser("status")
@@ -689,17 +710,6 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--confirm")
     p.set_defaults(
         func=cmd_reset
-    )
-
-    p = sub.add_parser("deploy")
-    p.add_argument(
-        "target",
-        nargs="?",
-        default="all",
-    )
-    p.set_defaults(
-        func=cmd_planned,
-        command_path="deploy",
     )
 
     spare = sub.add_parser("spare")
@@ -796,6 +806,13 @@ def build_context(
         args.runtime_dir,
         audit=audit,
     )
+    deployment = DeploymentManager(
+        inv,
+        runtime,
+        state,
+        preflight,
+        audit=audit,
+    )
 
     return Context(
         inventory=inv,
@@ -804,6 +821,7 @@ def build_context(
         preflight=preflight,
         spare=spare,
         audit=audit,
+        deployment=deployment,
     )
 
 
