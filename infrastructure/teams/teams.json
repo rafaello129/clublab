@@ -11,6 +11,12 @@
     "bind_ip_env": "CLUBLAB_BIND_IP",
     "ingress_subnet": "10.77.250.0/24"
   },
+  "preflight": {
+    "memory_per_absent_team_mib": 1536,
+    "memory_host_reserve_mib": 4096,
+    "disk_per_absent_team_gib": 2,
+    "disk_host_reserve_gib": 5
+  },
   "scenarios": [
     "normal",
     "ranking-db-failure",
