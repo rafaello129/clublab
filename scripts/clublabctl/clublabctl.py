@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -12,6 +13,7 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
 from clublabctl_lib import (  # noqa: E402
+    AuditLogger,
     CHECK_FAILED,
     CONFIG,
     NOT_IMPLEMENTED,
@@ -20,17 +22,21 @@ from clublabctl_lib import (  # noqa: E402
     SECURITY_GUARD,
     CommandRunner,
     Inventory,
+    OperationalMonitor,
+    PreflightRunner,
     ScenarioManager,
+    SpareManager,
     StateStore,
     aggregate,
+    has_critical_failure,
     load_inventory,
     require_target,
     validate_inventory,
 )
-from clublabctl_lib.docker_runtime import DockerRuntime  # noqa: E402
+from clublabctl_lib.operational_runtime import OperationalRuntime  # noqa: E402
 
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 REPO_ROOT = HERE.parents[1]
 DEFAULT_INVENTORY = (
     REPO_ROOT
@@ -46,10 +52,19 @@ DEFAULT_RUNTIME_DIR = Path(
 )
 
 
+@dataclass
+class Context:
+    inventory: Inventory
+    manager: ScenarioManager
+    monitor: OperationalMonitor
+    preflight: PreflightRunner
+    spare: SpareManager
+    audit: AuditLogger
+
+
 def cmd_version(
     _: argparse.Namespace,
-    __: Inventory,
-    ___: ScenarioManager,
+    __: Context,
 ) -> int:
     print(VERSION)
     return OK
@@ -57,9 +72,9 @@ def cmd_version(
 
 def cmd_inventory_list(
     _: argparse.Namespace,
-    inv: Inventory,
-    __: ScenarioManager,
+    ctx: Context,
 ) -> int:
+    inv = ctx.inventory
     print(
         f"{'TARGET':<8} "
         f"{'PORT':<6} "
@@ -80,16 +95,15 @@ def cmd_inventory_list(
 
 def cmd_inventory_show(
     args: argparse.Namespace,
-    inv: Inventory,
-    __: ScenarioManager,
+    ctx: Context,
 ) -> int:
     require_target(
-        inv,
+        ctx.inventory,
         args.target,
     )
     print(
         json.dumps(
-            inv.teams[args.target],
+            ctx.inventory.teams[args.target],
             indent=2,
             ensure_ascii=False,
         )
@@ -99,10 +113,11 @@ def cmd_inventory_show(
 
 def cmd_inventory_validate(
     _: argparse.Namespace,
-    inv: Inventory,
-    __: ScenarioManager,
+    ctx: Context,
 ) -> int:
-    errors = validate_inventory(inv)
+    errors = validate_inventory(
+        ctx.inventory
+    )
     if errors:
         for error in errors:
             print(f"FAIL {error}")
@@ -110,7 +125,7 @@ def cmd_inventory_validate(
 
     print(
         f"PASS inventory valid "
-        f"({len(inv.teams)} targets)"
+        f"({len(ctx.inventory.teams)} targets)"
     )
     return OK
 
@@ -127,19 +142,18 @@ def print_results(results) -> int:
 
 def cmd_scenario_load(
     args: argparse.Namespace,
-    inv: Inventory,
-    manager: ScenarioManager,
+    ctx: Context,
 ) -> int:
-    if args.scenario not in inv.scenarios:
+    if args.scenario not in ctx.inventory.scenarios:
         raise ValueError(
             f"Unknown scenario: {args.scenario}"
         )
 
-    teams = manager.expand_target(
+    teams = ctx.manager.expand_target(
         args.target
     )
     results = [
-        manager.load_one(
+        ctx.manager.load_one(
             team,
             args.scenario,
         )
@@ -150,14 +164,13 @@ def cmd_scenario_load(
 
 def cmd_scenario_clear(
     args: argparse.Namespace,
-    _: Inventory,
-    manager: ScenarioManager,
+    ctx: Context,
 ) -> int:
-    teams = manager.expand_target(
+    teams = ctx.manager.expand_target(
         args.target
     )
     results = [
-        manager.clear_one(team)
+        ctx.manager.clear_one(team)
         for team in teams
     ]
     return print_results(results)
@@ -165,10 +178,9 @@ def cmd_scenario_clear(
 
 def cmd_scenario_status(
     args: argparse.Namespace,
-    _: Inventory,
-    manager: ScenarioManager,
+    ctx: Context,
 ) -> int:
-    teams = manager.expand_target(
+    teams = ctx.manager.expand_target(
         args.target
     )
 
@@ -182,7 +194,7 @@ def cmd_scenario_status(
     failed = False
     for team in teams:
         try:
-            status = manager.status_one(
+            status = ctx.manager.status_one(
                 team
             )
             print(
@@ -209,14 +221,13 @@ def cmd_scenario_status(
 
 def cmd_recover(
     args: argparse.Namespace,
-    _: Inventory,
-    manager: ScenarioManager,
+    ctx: Context,
 ) -> int:
-    teams = manager.expand_target(
+    teams = ctx.manager.expand_target(
         args.target
     )
     results = [
-        manager.recover_one(team)
+        ctx.manager.recover_one(team)
         for team in teams
     ]
     return print_results(results)
@@ -224,10 +235,9 @@ def cmd_recover(
 
 def cmd_reset(
     args: argparse.Namespace,
-    _: Inventory,
-    manager: ScenarioManager,
+    ctx: Context,
 ) -> int:
-    teams = manager.expand_target(
+    teams = ctx.manager.expand_target(
         args.target,
         include_spare=args.target == "all",
     )
@@ -250,7 +260,7 @@ def cmd_reset(
         return SECURITY_GUARD
 
     results = [
-        manager.reset_one(
+        ctx.manager.reset_one(
             team,
             confirmed=True,
         )
@@ -259,10 +269,272 @@ def cmd_reset(
     return print_results(results)
 
 
+def cmd_preflight(
+    args: argparse.Namespace,
+    ctx: Context,
+) -> int:
+    results = ctx.preflight.run(
+        args.target
+    )
+
+    print(
+        f"{'CATEGORY':<10} "
+        f"{'STATUS':<6} "
+        f"{'CHECK':<28} "
+        f"DETAIL"
+    )
+
+    for item in results:
+        print(
+            f"{item.category:<10} "
+            f"{item.status:<6} "
+            f"{item.name:<28} "
+            f"{item.detail}"
+        )
+
+    failed = has_critical_failure(
+        results
+    )
+    ctx.audit.write(
+        action="preflight",
+        result="failure" if failed else "success",
+        team=args.target,
+        meta={
+            "code": (
+                CHECK_FAILED
+                if failed
+                else OK
+            )
+        },
+    )
+    return (
+        CHECK_FAILED
+        if failed
+        else OK
+    )
+
+
+def cmd_status(
+    args: argparse.Namespace,
+    ctx: Context,
+) -> int:
+    targets = ctx.monitor.targets(
+        args.target
+    )
+
+    print(
+        f"{'TEAM':<8} "
+        f"{'FRONT':<8} "
+        f"{'API':<8} "
+        f"{'DB':<8} "
+        f"{'TOOLBOX':<8} "
+        f"{'SCENARIO':<24} "
+        f"{'STATE'}"
+    )
+
+    failed = False
+    for team in targets:
+        status = ctx.monitor.status_one(
+            team
+        )
+        print(
+            f"{status.team:<8} "
+            f"{status.frontend:<8} "
+            f"{status.api:<8} "
+            f"{status.database:<8} "
+            f"{status.toolbox:<8} "
+            f"{status.scenario:<24} "
+            f"{status.infra_state}"
+        )
+
+        if status.infra_state in {
+            "DEGRADED",
+            "FAILED",
+        }:
+            failed = True
+        if (
+            args.target != "all"
+            and status.infra_state == "ABSENT"
+        ):
+            failed = True
+
+    return (
+        CHECK_FAILED
+        if failed
+        else OK
+    )
+
+
+def cmd_resources(
+    args: argparse.Namespace,
+    ctx: Context,
+) -> int:
+    rows = ctx.monitor.resources(
+        args.target
+    )
+
+    if not rows:
+        print("No deployed ClubLab resources found.")
+        return OK
+
+    print(
+        f"{'TEAM':<8} "
+        f"{'ROLE':<10} "
+        f"{'CPU':<10} "
+        f"{'MEMORY':<24} "
+        f"{'PIDS':<8} "
+        f"NET I/O"
+    )
+
+    for row in rows:
+        print(
+            f"{row['team']:<8} "
+            f"{row['role']:<10} "
+            f"{str(row['cpu']):<10} "
+            f"{str(row['memory']):<24} "
+            f"{str(row['pids']):<8} "
+            f"{row['net_io']}"
+        )
+    return OK
+
+
+def cmd_logs(
+    args: argparse.Namespace,
+    ctx: Context,
+) -> int:
+    content = ctx.monitor.logs(
+        args.target,
+        args.role,
+        lines=args.lines,
+    )
+    if content:
+        print(content)
+    return OK
+
+
+def cmd_spare_status(
+    _: argparse.Namespace,
+    ctx: Context,
+) -> int:
+    status = ctx.spare.status()
+    assignment = status["assignment"]
+    assigned = (
+        assignment.get("assigned_team")
+        if assignment
+        else "-"
+    )
+
+    print(
+        f"Spare state:    {status['infra_state']}"
+    )
+    print(
+        f"Scenario:       {status['scenario']}"
+    )
+    print(
+        f"Frontend:       {status['frontend']}"
+    )
+    print(
+        f"API:            {status['api']}"
+    )
+    print(
+        f"Database:       {status['database']}"
+    )
+    print(
+        f"Toolbox:        {status['toolbox']}"
+    )
+    print(
+        f"Access port:    {status['access_port']}"
+    )
+    print(
+        f"Assigned team:  {assigned}"
+    )
+
+    return (
+        OK
+        if status["infra_state"] == "READY"
+        and status["scenario"] == "normal"
+        else CHECK_FAILED
+    )
+
+
+def cmd_spare_assign(
+    args: argparse.Namespace,
+    ctx: Context,
+) -> int:
+    require_target(
+        ctx.inventory,
+        args.target,
+    )
+    value = ctx.spare.assign(
+        args.target
+    )
+    port = value["access_port"]
+    bind_ip = os.getenv(
+        ctx.inventory.raw.get(
+            "gateway",
+            {},
+        ).get(
+            "bind_ip_env",
+            "CLUBLAB_BIND_IP",
+        ),
+        "",
+    ).strip()
+
+    print(
+        f"Spare assigned to {value['assigned_team']}."
+    )
+    if bind_ip:
+        print(
+            f"Access URL: http://{bind_ip}:{port}"
+        )
+    else:
+        print(
+            f"Access port: {port}"
+        )
+    print(
+        "Use the spare access credentials prepared for the session."
+    )
+    return OK
+
+
+def cmd_spare_release(
+    _: argparse.Namespace,
+    ctx: Context,
+) -> int:
+    changed = ctx.spare.release()
+    print(
+        "Spare assignment released."
+        if changed
+        else "Spare was not assigned."
+    )
+    return OK
+
+
+def cmd_audit_tail(
+    args: argparse.Namespace,
+    ctx: Context,
+) -> int:
+    events = ctx.audit.tail(
+        args.lines
+    )
+    if not events:
+        print("Audit log is empty.")
+        return OK
+
+    for event in events:
+        print(
+            f"{event.get('ts', '?')} "
+            f"{event.get('actor', '?'):<12} "
+            f"{event.get('action', '?'):<18} "
+            f"{event.get('team', '-'):<8} "
+            f"{event.get('result', '?')}"
+        )
+    return OK
+
+
 def cmd_planned(
     args: argparse.Namespace,
-    inv: Inventory,
-    _: ScenarioManager,
+    ctx: Context,
 ) -> int:
     target = getattr(
         args,
@@ -271,28 +543,15 @@ def cmd_planned(
     )
     if target is not None:
         require_target(
-            inv,
+            ctx.inventory,
             target,
             allow_all=True,
-        )
-
-    role = getattr(
-        args,
-        "role",
-        None,
-    )
-    if (
-        role is not None
-        and role not in inv.roles
-    ):
-        raise ValueError(
-            f"Unknown role: {role}"
         )
 
     print(
         f"{args.command_path}: "
         "reserved by Phase 5; "
-        "implementation arrives in Block C.",
+        "implementation arrives in Block D.",
         file=sys.stderr,
     )
     return NOT_IMPLEMENTED
@@ -344,6 +603,48 @@ def build_parser() -> argparse.ArgumentParser:
         func=cmd_inventory_validate
     )
 
+    p = sub.add_parser("preflight")
+    p.add_argument(
+        "target",
+        nargs="?",
+        default="all",
+    )
+    p.set_defaults(
+        func=cmd_preflight
+    )
+
+    p = sub.add_parser("status")
+    p.add_argument(
+        "target",
+        nargs="?",
+        default="all",
+    )
+    p.set_defaults(
+        func=cmd_status
+    )
+
+    p = sub.add_parser("resources")
+    p.add_argument(
+        "target",
+        nargs="?",
+        default="all",
+    )
+    p.set_defaults(
+        func=cmd_resources
+    )
+
+    p = sub.add_parser("logs")
+    p.add_argument("target")
+    p.add_argument("role")
+    p.add_argument(
+        "--lines",
+        type=int,
+        default=100,
+    )
+    p.set_defaults(
+        func=cmd_logs
+    )
+
     scenario = sub.add_parser("scenario")
     scenario_sub = scenario.add_subparsers(
         dest="scenario_command",
@@ -390,29 +691,15 @@ def build_parser() -> argparse.ArgumentParser:
         func=cmd_reset
     )
 
-    for name in (
-        "preflight",
-        "deploy",
-        "status",
-        "resources",
-    ):
-        p = sub.add_parser(name)
-        p.add_argument(
-            "target",
-            nargs="?",
-            default="all",
-        )
-        p.set_defaults(
-            func=cmd_planned,
-            command_path=name,
-        )
-
-    p = sub.add_parser("logs")
-    p.add_argument("target")
-    p.add_argument("role")
+    p = sub.add_parser("deploy")
+    p.add_argument(
+        "target",
+        nargs="?",
+        default="all",
+    )
     p.set_defaults(
         func=cmd_planned,
-        command_path="logs",
+        command_path="deploy",
     )
 
     spare = sub.add_parser("spare")
@@ -423,15 +710,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = spare_sub.add_parser("status")
     p.set_defaults(
-        func=cmd_planned,
-        command_path="spare status",
+        func=cmd_spare_status
     )
 
     p = spare_sub.add_parser("assign")
     p.add_argument("target")
     p.set_defaults(
-        func=cmd_planned,
-        command_path="spare assign",
+        func=cmd_spare_assign
+    )
+
+    p = spare_sub.add_parser("release")
+    p.set_defaults(
+        func=cmd_spare_release
     )
 
     audit = sub.add_parser("audit")
@@ -447,11 +737,74 @@ def build_parser() -> argparse.ArgumentParser:
         default=30,
     )
     p.set_defaults(
-        func=cmd_planned,
-        command_path="audit tail",
+        func=cmd_audit_tail
     )
 
     return parser
+
+
+def build_context(
+    args: argparse.Namespace,
+) -> Context:
+    inv = load_inventory(
+        args.inventory
+    )
+
+    errors = validate_inventory(inv)
+    if (
+        errors
+        and args.command != "inventory"
+    ):
+        raise ValueError(
+            "; ".join(errors)
+        )
+
+    runner = CommandRunner()
+    state = StateStore(
+        args.runtime_dir
+    )
+    audit = AuditLogger(
+        args.runtime_dir
+    )
+    runtime = OperationalRuntime(
+        inv,
+        runner,
+        REPO_ROOT,
+        args.runtime_dir,
+    )
+    manager = ScenarioManager(
+        inv,
+        runtime,
+        state,
+        audit=audit,
+    )
+    monitor = OperationalMonitor(
+        inv,
+        runtime,
+        state,
+    )
+    preflight = PreflightRunner(
+        inv,
+        runtime,
+        runner,
+        REPO_ROOT,
+        args.runtime_dir,
+    )
+    spare = SpareManager(
+        inv,
+        monitor,
+        args.runtime_dir,
+        audit=audit,
+    )
+
+    return Context(
+        inventory=inv,
+        manager=manager,
+        monitor=monitor,
+        preflight=preflight,
+        spare=spare,
+        audit=audit,
+    )
 
 
 def main() -> int:
@@ -459,46 +812,15 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
-        inv = load_inventory(
-            args.inventory
+        ctx = build_context(
+            args
         )
-
-        errors = validate_inventory(inv)
-        if (
-            errors
-            and args.command != "inventory"
-        ):
-            for error in errors:
-                print(
-                    f"FAIL {error}",
-                    file=sys.stderr,
-                )
-            return CONFIG
-
-        runner = CommandRunner()
-        state = StateStore(
-            args.runtime_dir
-        )
-        runtime = DockerRuntime(
-            inv,
-            runner,
-            REPO_ROOT,
-            args.runtime_dir,
-        )
-        manager = ScenarioManager(
-            inv,
-            runtime,
-            state,
-        )
-
         return int(
             args.func(
                 args,
-                inv,
-                manager,
+                ctx,
             )
         )
-
     except ValueError as exc:
         print(
             f"ERROR {exc}",
