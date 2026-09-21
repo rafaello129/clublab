@@ -23,6 +23,7 @@ APP02 Backend y API
 APP03 Frontend y UX
 APP04 Aplicación integrada
 D04 Scenario Manager y operación
+D05 Roles y dinámica de equipos
 ~~~
 
-La Fase 6 inicia la consolidación de roles, rotación y dinámica de equipos. Su documento final previsto será D05.
+La Fase 6 está cerrada a nivel de diseño. La validación empírica de tiempos, participación y dinámica se realizará en Fase 9.
