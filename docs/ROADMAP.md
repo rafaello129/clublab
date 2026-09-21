@@ -6,7 +6,7 @@
 3. Seguridad y aislamiento — ✅ diseño completado; validación empírica pendiente.
 4. Aplicación ClubLab — ✅ diseño completado; implementación real pendiente.
 5. Scenario Manager y operación — ✅ diseño y control plane completados; live validation pendiente.
-6. Roles y dinámica de equipos — 🟡 Bloques A–C completados; Bloque D pendiente.
+6. Roles y dinámica de equipos — ✅ diseño completado; validación empírica pendiente en Fase 9.
 7. Materiales del alumno — ⏳ pendiente.
 8. Materiales del instructor — ⏳ pendiente.
 9. Ensayo técnico y pedagógico — ⏳ pendiente.
@@ -46,53 +46,63 @@ operational validation matrix
 D04
 ~~~
 
-## Fase 6
-
-Completado:
+## Fase 6 — cerrada
 
 ~~~text
 Block A
 contratos finales R1–R5
 herramientas y límites reales por rol
-evidencia mínima por rol
+evidencia mínima
 configuraciones 2/3/4/5 integrantes
-contingencia individual
-reglas para avanzados/principiantes
 
 Block B
 matriz M0–M8
-funciones OPERAR/OBSERVAR/VERIFICAR/REGISTRAR
-protocolo POE
+OPERAR/OBSERVAR/VERIFICAR/REGISTRAR
+POE
 regla del teclado
-rotación 2/3/4/5 integrantes
-handoff y readback
-M7 por rondas de evidencia
-barrera previa a recover
+rotación
+handoff/readback
 
 Block C
 protocolo M6/M7
-hipótesis principal + alternativa
-evidencia fuerte/débil
-barrera reforzada de recovery
-verificación post-recover
-regla anti-monopolio
-escalera de pistas P0–P4
+hipótesis
+barrera de recovery
+P0–P4
+anti-monopolio
 equipos rápidos/lentos
-ausencias
-fallo de laptop
-recover prematuro
-contingencias C1–C6
+ausencias y contingencias
+
+Block D
+validación de diseño V2/V3/V4/V5
+validación temporal
+participación
+seguridad
+métricas y umbrales para ensayo
+D05
 ~~~
 
-Pendiente:
+Entregable oficial:
 
 ~~~text
-Block D
-validación de mesa 2/3/4/5 personas
-validación temporal
-validación de participación
-validación de seguridad
-consolidación D05
+D05_Roles_y_Dinamica_Equipos_ClubLab.md
+~~~
+
+La configuración recomendada permanece:
+
+~~~text
+4 integrantes por team
+~~~
+
+Dos integrantes se conserva como contingencia con riesgo de tiempo/carga cognitiva.
+
+## Siguiente fase documental
+
+~~~text
+Fase 7 — Materiales del alumno
+D06 Guía del alumno
+D07 Cheat Sheet
+D08 Cuaderno de Misiones
+tarjetas de rol y hojas de evidencia
 ~~~
 
 ## Próxima necesidad técnica
@@ -111,4 +121,4 @@ runtime generation
 pinned images
 ~~~
 
-Las Fases 6–8 pueden documentarse en paralelo, pero Fase 9 no debe iniciarse hasta que la aplicación e infraestructura reales pasen preflight, smoke y security gates.
+Las Fases 7–8 pueden documentarse en paralelo, pero Fase 9 no debe iniciarse hasta que la aplicación e infraestructura reales pasen preflight, smoke y security gates.
